@@ -352,13 +352,13 @@ void checkusbpkg(char *sourcedir, char* destdir) {
             {}
             else
             {
-            sprintf(upkg_path, "%s/%s", "/mnt/usb0/", dp->d_name);
+            sprintf(upkg_path, "%s/%s", "/mnt/usb0", dp->d_name);
             if (!stat(upkg_path, &info))
             {
-		if (file_compare(sourcedir, upkg_path))
-		{
                 if (S_ISREG(info.st_mode))
                 {
+		if (file_compare(sourcedir, upkg_path))
+		{
 		    rename(upkg_path, destdir);
 		    break;
 	        }
