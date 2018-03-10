@@ -109,7 +109,7 @@ int fgetc(FILE *fp)
 
 char *read_string(FILE* f)
 {
-    char *string = malloc(sizeof(char) * 256);
+    char *string = malloc(sizeof(char) * 65535);
     int c;
     int length = 0;
     if (!string) return string;
@@ -505,4 +505,5 @@ int _main(struct thread *td) {
     nthread_run = 0;
     return 0;
 }
+
 
