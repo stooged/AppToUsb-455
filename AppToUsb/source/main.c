@@ -167,7 +167,7 @@ void makeini()
     {
     FILE *ini = fopen(ini_file_path,"wb");
     char *buffer;
-    buffer ="To check the usb root for the pkg file to save time copying from the internal ps4 drive then uncomment the line below.\r\nbut remember this will move the pkg from the root directory to the PS4 folder.\r\n//CHECK_USB\r\n\r\nTo use this list as a list of games you want to move not ignore then uncomment the line below.\r\n//MODE_MOVE\r\n\r\nExample ignore or move usage.\r\n\r\nCUSAXXXX1\r\nCUSAXXXX2\r\nCUSAXXXX3";
+    buffer ="To check the usb root for the pkg file to save time copying from the internal ps4 drive then uncomment the line below.\r\nbut remember this will move the pkg from the root directory to the PS4 folder.\r\n//CHECK_USB\r\n\r\nTo leave game updates on the internal drive uncomment the line below\r\n//IGNORE_UPDATES\r\n\r\nTo use this list as a list of games you want to move not ignore then uncomment the line below.\r\n//MODE_MOVE\r\n\r\nExample ignore or move usage.\r\n\r\nCUSAXXXX1\r\nCUSAXXXX2\r\nCUSAXXXX3";
     fwrite(buffer, 1, strlen(buffer), ini);
     fclose(ini);
     }
@@ -182,9 +182,17 @@ int isinlist(char *sourcefile)
             fclose(cfile);
             if (strlen(idata) != 0)
             {
-                char *tmpstr;
+             char *tmpstr;
+                if (strstr(idata, "/user/app/") != NULL)
+                {
                 tmpstr = replace_str(sourcefile, "/user/app/", "");
                 tmpstr = replace_str(tmpstr, "/app.pkg", "");
+                }
+                else
+                {
+                tmpstr = replace_str(sourcefile, "/user/patch/", "");
+                tmpstr = replace_str(tmpstr, "/patch.pkg", "");
+                }
                 if(strstr(idata, tmpstr) != NULL) 
                 {
                    return 1;
@@ -256,6 +264,33 @@ int isusbcheck()
 }
 
 
+int isignupdates()
+{
+        if (file_exists(ini_file_path)) 
+        {
+            FILE *cfile = fopen(ini_file_path, "rb");
+            char *idata = read_string(cfile);
+            fclose(cfile);
+            if (strlen(idata) != 0)
+            {
+                if(strstr(idata, "//IGNORE_UPDATES") != NULL) 
+                {
+                   return 0;
+                }
+                else if(strstr(idata, "IGNORE_UPDATES") != NULL) 
+                {
+                   return 1;
+                }
+             return 0;
+             }
+        return 0;
+        }
+        else
+        {
+             return 0;
+        }
+}
+
 
 void copyFile(char *sourcefile, char* destfile)
 {
@@ -313,13 +348,13 @@ void copypkg(char *sourcepath, char* destpath)
             {
                 if (!file_compare(sourcepath, destpath))
                 {
-                    sprintf(cmsg, "%s\n%s\nOverwriting as pkg files are mismatched", "Found app.pkg at " , destpath);
+                    sprintf(cmsg, "%s\n%s\nOverwriting as pkg files are mismatched", "Found pkg at " , destpath);
                     systemMessage(cmsg);
                     copyFile(sourcepath, destpath);
                 } 
                 else
                 {  
-                    sprintf(cmsg, "%s\n%s\nSkipping copy and linking existing pkg", "Found app.pkg at " , destpath);
+                    sprintf(cmsg, "%s\n%s\nSkipping copy and linking existing pkg", "Found pkg at " , destpath);
                     systemMessage(cmsg);
                     sceKernelSleep(5);
                     unlink(sourcepath);
@@ -404,7 +439,7 @@ void copyDir(char *sourcedir, char* destdir)
                 else
                 if (S_ISREG(info.st_mode))
                 {
-                  if(strstr(src_path, "app.pkg") != NULL) 
+                  if(strstr(src_path, "app.pkg") != NULL || strstr(src_path, "patch.pkg") != NULL) 
                   {
                    if (ismovemode() )
                    {
@@ -412,7 +447,6 @@ void copyDir(char *sourcedir, char* destdir)
                    {
                      checkusbpkg(src_path, dst_path);
                      copypkg(src_path, dst_path);
-
                    }
                  }
                  else
@@ -495,15 +529,26 @@ int _main(struct thread *td) {
                         fclose(usbdir);
                         unlink("/mnt/usb0/.dirtest");
                         mkdir("/mnt/usb0/PS4/", 0777);
+                        sprintf(ini_file_path, "/mnt/usb0/%s", INI_FILE);
+                        if (!file_exists(ini_file_path))
+                        {
                         sprintf(ini_file_path, "/mnt/usb0/PS4/%s", INI_FILE);
                         makeini();
+                        }
                         systemMessage("Copying Apps to USB0\n\nThis will take a while if you have lots of games installed");
                         copyDir("/user/app","/mnt/usb0/PS4");
+                        if (!isignupdates())
+                        {
+                           mkdir("/mnt/usb0/PS4/updates/", 0777);
+                           systemMessage("Copying updates to USB0");
+                           copyDir("/user/patch","/mnt/usb0/PS4/updates");
+                        }
                         systemMessage("Complete.");
             }
 
     nthread_run = 0;
     return 0;
 }
+
 
 
