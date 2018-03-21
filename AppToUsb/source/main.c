@@ -183,7 +183,7 @@ int isinlist(char *sourcefile)
             if (strlen(idata) != 0)
             {
              char *tmpstr;
-                if (strstr(idata, "/user/app/") != NULL)
+                if (strstr(sourcefile, "/user/app/") != NULL)
                 {
                 tmpstr = replace_str(sourcefile, "/user/app/", "");
                 tmpstr = replace_str(tmpstr, "/app.pkg", "");
