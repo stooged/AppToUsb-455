@@ -8,6 +8,11 @@
 int nthread_run;
 char notify_buf[1024];
 char ini_file_path[255];
+int  xfer_pct;
+long xfer_cnt;
+char *cfile;
+int tmpcnt;
+int isxfer;
 
 
 void systemMessage(char* msg) {
@@ -300,6 +305,8 @@ void copyFile(char *sourcefile, char* destfile)
         FILE *out = fopen(destfile,"wb");
         if (out)
         {
+            cfile = sourcefile;
+            isxfer = 1;
             size_t bytes, bytes_size, bytes_copied = 0;
             char *buffer = malloc(65536);
             if (buffer != NULL)
@@ -311,12 +318,15 @@ void copyFile(char *sourcefile, char* destfile)
                     fwrite(buffer, 1, bytes, out);
                     bytes_copied += bytes;
                     if (bytes_copied > bytes_size) bytes_copied = bytes_size;
-                    sprintf(notify_buf, "Copying: %s\n\n%u%% completed...\n", sourcefile , bytes_copied * 100 / bytes_size);
+                   xfer_pct = bytes_copied * 100 / bytes_size;
+                   xfer_cnt += bytes;
                 }
                 free(buffer);
             }
             fclose(out);
-            notify_buf[0] = '\0';
+            isxfer = 0;
+            xfer_pct = 0;
+            xfer_cnt = 0;
             unlink(sourcefile);
             symlink(destfile, sourcefile);
         }
@@ -327,7 +337,6 @@ void copyFile(char *sourcefile, char* destfile)
     else {
     }
 }
-
 
 
 
@@ -467,26 +476,53 @@ void copyDir(char *sourcedir, char* destdir)
 
 
 
-
 void *nthread_func(void *arg)
 {
         time_t t1, t2;
         t1 = 0;
 	while (nthread_run)
 	{
-		if (notify_buf[0])
+		if (isxfer)
 		{
 			t2 = time(NULL);
 			if ((t2 - t1) >= 20)
 			{
 				t1 = t2;
-                                systemMessage(notify_buf);
+				if (tmpcnt >= 1048576)
+				{
+				   sprintf(notify_buf, "Copying: %s\n\n%u%% completed\nSpeed: %u MB/s", cfile , xfer_pct, tmpcnt / 1048576);
+				}
+				else if (tmpcnt >= 1024)
+				{
+				   sprintf(notify_buf, "Copying: %s\n\n%u%% completed\nSpeed: %u KB/s", cfile , xfer_pct, tmpcnt / 1024);
+				}
+				else
+				{
+				   sprintf(notify_buf, "Copying: %s\n\n%u%% completed\nSpeed: %u B/s", cfile , xfer_pct, tmpcnt);
+				}
+				
+				systemMessage(notify_buf);
 			}
 		}
 		else t1 = 0;
 		sceKernelSleep(1);
 	}
+	return NULL;
+}
 
+
+
+void *sthread_func(void *arg)
+{
+	while (nthread_run)
+	{
+           if (isxfer)
+           {
+              tmpcnt = xfer_cnt;
+              xfer_cnt = 0;
+           }
+          sceKernelSleep(1);
+	}
 	return NULL;
 }
 
@@ -507,11 +543,13 @@ int _main(struct thread *td) {
        closedir(dir);
     }
     initSysUtil();
-
+        xfer_cnt = 0;
+        isxfer = 0;
 	nthread_run = 1;
-	notify_buf[0] = '\0';
 	ScePthread nthread;
 	scePthreadCreate(&nthread, NULL, nthread_func, NULL, "nthread");
+	ScePthread sthread;
+	scePthreadCreate(&sthread, NULL, sthread_func, NULL, "sthread");
         systemMessage("Warning this payload will modify the filesystem on your PS4\n\nUnplug your usb drive to cancel this");
         sceKernelSleep(10);
         systemMessage("Last warning\n\nUnplug your usb drive to cancel this");
@@ -545,7 +583,6 @@ int _main(struct thread *td) {
                         }
                         systemMessage("Complete.");
             }
-
     nthread_run = 0;
     return 0;
 }
