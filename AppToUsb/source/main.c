@@ -128,7 +128,7 @@ int fgetc(FILE *fp)
 
 char *read_string(FILE* f)
 {
-    char *string = malloc(sizeof(char) * 65535);
+    char *string = malloc(sizeof(char) * 65536);
     int c;
     int length = 0;
     if (!string) return string;
@@ -187,10 +187,23 @@ void makeini()
     {
     FILE *ini = fopen(ini_file_path,"wb");
     char *buffer;
-    buffer ="To check the usb root for the pkg file to save time copying from the internal ps4 drive then uncomment the line below.\r\nbut remember this will move the pkg from the root directory to the PS4 folder.\r\n//CHECK_USB\r\n\r\nTo leave game updates on the internal drive uncomment the line below\r\n//IGNORE_UPDATES\r\n\r\nTo use this list as a list of games you want to move not ignore then uncomment the line below.\r\n//MODE_MOVE\r\n\r\nExample ignore or move usage.\r\n\r\nCUSAXXXX1\r\nCUSAXXXX2\r\nCUSAXXXX3";
+    buffer ="To check the usb root for the pkg file to save time copying from the internal ps4 drive then uncomment the line below.\r\nbut remember this will move the pkg from the root directory to the PS4 folder.\r\n//CHECK_USB\r\n\r\nTo rename previously linked pkg files to the new format uncomment the line below.\r\n//RENAME_APP\r\n\r\nTo leave game updates on the internal drive uncomment the line below.\r\n//IGNORE_UPDATES\r\n\r\nTo use this list as a list of games you want to move not ignore then uncomment the line below.\r\n//MODE_MOVE\r\n\r\nExample ignore or move usage.\r\n\r\nCUSAXXXX1\r\nCUSAXXXX2\r\nCUSAXXXX3";
     fwrite(buffer, 1, strlen(buffer), ini);
     fclose(ini);
     }
+}
+
+
+char *getContentID(char* pkgFile)
+{
+        char buffer[37];
+        char *retval = malloc(sizeof(char)*37);
+        FILE *pfile = fopen(pkgFile, "rb");
+        fseek (pfile, 64, SEEK_SET);
+        fread(buffer, 1, sizeof(buffer), pfile);
+        fclose(pfile);
+        strcpy(retval, buffer);
+        return retval;
 }
 
 
@@ -313,6 +326,34 @@ int isignupdates()
 }
 
 
+int isrelink()
+{
+        if (file_exists(ini_file_path)) 
+        {
+            FILE *cfile = fopen(ini_file_path, "rb");
+            char *idata = read_string(cfile);
+            fclose(cfile);
+            if (strlen(idata) != 0)
+            {
+                if(strstr(idata, "//RENAME_APP") != NULL) 
+                {
+                   return 0;
+                }
+                else if(strstr(idata, "RENAME_APP") != NULL) 
+                {
+                   return 1;
+                }
+             return 0;
+             }
+        return 0;
+        }
+        else
+        {
+             return 0;
+        }
+}
+
+
 
 void copySmFile(char *sourcefile, char* destfile)
 {
@@ -387,27 +428,24 @@ void copyFile(char *sourcefile, char* destfile)
 }
 
 
+
 void makePkgInfo(char *pkgFile, char *destpath)
 {
     if(strstr(pkgFile, "app.pkg") != NULL)
     {
         char *titleid;
-        char buffer[37];
         char srcfile[256];
         char dstfile[256];
         destpath = replace_str(destpath, "/app.pkg", "");
         titleid = replace_str(pkgFile, "/user/app/", "");
         titleid = replace_str(titleid, "/app.pkg", "");
 
-        FILE *srcid = fopen(pkgFile, "rb");
-        fseek (srcid, 64, SEEK_SET);
-        fread(buffer, 1, sizeof(buffer), srcid);
-        fclose(srcid);
-
         sprintf(srcfile, "/user/appmeta/%s/pronunciation.xml", titleid);
         if (file_exists(srcfile))
         {
-           sprintf(dstfile, "%s/%s.txt", destpath , buffer);
+           char *cid = getContentID(pkgFile);
+           sprintf(dstfile, "%s/%s.txt", destpath , cid);
+           free(cid);
            copySmFile(srcfile, dstfile);
         }
 
@@ -437,32 +475,49 @@ void makePkgInfo(char *pkgFile, char *destpath)
 
 void copypkg(char *sourcepath, char* destpath)
 {       
-  char cmsg[1024];
-	if (!symlink_exists(sourcepath))
-        {
+    if (!symlink_exists(sourcepath))
+    {
         if (isfpkg(sourcepath) == 0) 
         {
-            if (!file_exists(destpath)) 
+            char cmsg[1024];
+            char dstfile[50];
+            char *ndestpath;
+            char *cid = getContentID(sourcepath);
+            sprintf(dstfile, "%s.pkg", cid);
+            free(cid);
+            if(strstr(sourcepath, "app.pkg") != NULL)
             {
-                sprintf(cmsg, "%s\n%s", "Processing:" , sourcepath);
-                systemMessage(cmsg);
-                copyFile(sourcepath, destpath);
+                ndestpath = replace_str(destpath, "app.pkg", dstfile);
             }
             else
             {
-                if (!file_compare(sourcepath, destpath))
+                ndestpath = replace_str(destpath, "patch.pkg", dstfile);
+            }
+            if (file_exists(destpath)) 
+            {
+               rename(destpath, ndestpath);
+            }
+            if (!file_exists(ndestpath)) 
+            {
+                sprintf(cmsg, "%s\n%s", "Processing:" , sourcepath);
+                systemMessage(cmsg);
+                copyFile(sourcepath, ndestpath);
+            }
+            else
+            {
+                if (!file_compare(sourcepath, ndestpath))
                 {
-                    sprintf(cmsg, "%s\n%s\nOverwriting as pkg files are mismatched", "Found pkg at " , destpath);
+                    sprintf(cmsg, "%s\n%s\nOverwriting as pkg files are mismatched", "Found pkg at " , ndestpath);
                     systemMessage(cmsg);
-                    copyFile(sourcepath, destpath);
+                    copyFile(sourcepath, ndestpath);
                 } 
                 else
                 {  
-                    sprintf(cmsg, "%s\n%s\nSkipping copy and linking existing pkg", "Found pkg at " , destpath);
+                    sprintf(cmsg, "%s\n%s\nSkipping copy and linking existing pkg", "Found pkg at " , ndestpath);
                     systemMessage(cmsg);
                     sceKernelSleep(5);
                     unlink(sourcepath);
-                    symlink(destpath, sourcepath);
+                    symlink(ndestpath, sourcepath);
                 }
             }
         }
@@ -477,6 +532,18 @@ void checkusbpkg(char *sourcedir, char* destdir) {
      {
         if (isfpkg(sourcedir) == 0) 
         {
+            char dstfile[50];
+            char *cid = getContentID(sourcedir);
+            sprintf(dstfile, "%s.pkg", cid);
+            free(cid);
+            if(strstr(sourcedir, "app.pkg") != NULL)
+            {
+                destdir = replace_str(destdir, "app.pkg", dstfile);
+            }
+            else
+            {
+                destdir = replace_str(destdir, "patch.pkg", dstfile);
+            }
             if (!file_exists(destdir)) 
             {
             DIR *dir;
@@ -487,7 +554,7 @@ void checkusbpkg(char *sourcedir, char* destdir) {
             if (dir) {
             while ((dp = readdir(dir)) != NULL)
             {
-            if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, ".."))
+            if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..") || !strcmp(dp->d_name, "$RECYCLE.BIN") || !strcmp(dp->d_name, "System Volume Information"))
             {}
             else
             {
@@ -511,6 +578,37 @@ void checkusbpkg(char *sourcedir, char* destdir) {
    }
  }
 }
+}
+
+
+
+void relink(char *sourcepath, char* destpath)
+{
+   if (isrelink())
+   {
+      if (symlink_exists(sourcepath))
+      {
+         if (file_exists(destpath)) 
+         {
+            char dstfile[50];
+            char *ndestpath;
+            char *cid = getContentID(destpath);
+            sprintf(dstfile, "%s.pkg", cid);
+            free(cid);
+            if(strstr(destpath, "app.pkg") != NULL)
+            {
+                ndestpath = replace_str(destpath, "app.pkg", dstfile);
+            }
+            else
+            {
+                ndestpath = replace_str(destpath, "patch.pkg", dstfile);
+            }
+            rename(destpath, ndestpath);
+            unlink(sourcepath);
+            symlink(ndestpath, sourcepath);
+         }
+      }
+   }
 }
 
 
@@ -549,6 +647,7 @@ void copyDir(char *sourcedir, char* destdir)
                    {
                    if (isinlist(src_path) )
                    {
+                     relink(src_path, dst_path);
                      makePkgInfo(src_path, dst_path);
                      checkusbpkg(src_path, dst_path);
                      copypkg(src_path, dst_path);
@@ -558,6 +657,7 @@ void copyDir(char *sourcedir, char* destdir)
                  {
                    if (!isinlist(src_path) )
                    {
+                     relink(src_path, dst_path);
                      makePkgInfo(src_path, dst_path);
                      checkusbpkg(src_path, dst_path);
                      copypkg(src_path, dst_path);
