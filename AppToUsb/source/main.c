@@ -24,46 +24,27 @@ void systemMessage(char* msg) {
 int file_compare(char *fname1, char *fname2)
 {
     long size1, size2;
-
-    int  bytesRead1 = 0,
-         bytesRead2 = 0,
-         lastBytes = 100,
-         res = 0,
-         i;
-
-    FILE *file1 = fopen(fname1, "rb"),
-         *file2 = fopen(fname2, "rb");
-
-    char *buffer1 = malloc(65536),
-         *buffer2 = malloc(65536);
-
+    int  bytesRead1 = 0, bytesRead2 = 0, lastBytes = 100, res = 0, i;
+    FILE *file1 = fopen(fname1, "rb"), *file2 = fopen(fname2, "rb");
+    char *buffer1 = malloc(65536), *buffer2 = malloc(65536);
     if (!file1 || !file2) {
         return res;
     }
-
     fseek (file1, 0, SEEK_END);
     fseek (file2, 0, SEEK_END);
-
     size1 = ftell (file1);
     size2 = ftell (file2);
-
     fseek(file1, 0L, SEEK_SET);
     fseek(file2, 0L, SEEK_SET);
-
     if (size1 != size2) {
         res = 0;
         goto exit;
     }
-
-
     if (size1 < lastBytes) lastBytes = size1;
-
     fseek(file1, -lastBytes, SEEK_END);
     fseek(file2, -lastBytes, SEEK_END);
-
     bytesRead1 = fread(buffer1, sizeof(char), lastBytes, file1);
     bytesRead2 = fread(buffer2, sizeof(char), lastBytes, file2);
-
     if (bytesRead1 > 0 && bytesRead1 == bytesRead2) {
         for ( i = 0; i < bytesRead1; i++) {
             if (buffer1[i] != buffer2[i]) {
@@ -73,16 +54,13 @@ int file_compare(char *fname1, char *fname2)
         }
         res = 1;
     }
-
     free(buffer1);
     free(buffer2);
-
     exit:
     fclose(file1);
     fclose(file2);
     return res;
 }
-
 
 
 char *replace_str( char *str,  char *orig,  char *rep)
@@ -113,6 +91,62 @@ char *replace_str( char *str,  char *orig,  char *rep)
      }
      ret[i] = '\0';
      return ret;
+}
+
+
+int split_string(char *str, char c, char ***arr)
+{
+    int count = 1;
+    int token_len = 1;
+    int i = 0;
+    char *p;
+    char *t;
+    p = str;
+    while (*p != '\0')
+    {
+        if (*p == c)
+            count++;
+        p++;
+    }
+    *arr = (char**) malloc(sizeof(char*) * count);
+    if (*arr == NULL)
+        return 0;
+    p = str;
+    while (*p != '\0')
+    {
+        if (*p == c)
+        {
+            (*arr)[i] = (char*) malloc( sizeof(char) * token_len );
+            if ((*arr)[i] == NULL)
+                return 0;
+            token_len = 0;
+            i++;
+        }
+        p++;
+        token_len++;
+    }
+    (*arr)[i] = (char*) malloc( sizeof(char) * token_len );
+    if ((*arr)[i] == NULL)
+        return 0;
+    i = 0;
+    p = str;
+    t = ((*arr)[i]);
+    while (*p != '\0')
+    {
+        if (*p != c && *p != '\0')
+        {
+            *t = *p;
+            t++;
+        }
+        else
+        {
+            *t = '\0';
+            i++;
+            t = ((*arr)[i]);
+        }
+        p++;
+    }
+    return count;
 }
 
 
@@ -204,6 +238,39 @@ char *getContentID(char* pkgFile)
         fclose(pfile);
         strcpy(retval, buffer);
         return retval;
+}
+
+
+char *getPkgName(char* sourcefile)
+{
+   char *retval = malloc(sizeof(char)*256);
+   char *jfile = replace_str(sourcefile, ".pkg", ".json");
+   if (file_exists(jfile)) 
+   {
+      FILE *cfile = fopen(jfile, "rb");
+      char *idata = read_string(cfile);
+      fclose(cfile);
+      char *ret;
+      ret = strstr(idata, "\"url\":\"");
+      if (ret != NULL)
+      {
+         int bcnt = 0;
+         char **buf = NULL;
+         bcnt = split_string(ret, '/', &buf);
+         split_string(buf[bcnt - 1], '"', &buf);
+         if (strlen(buf[0]) > 0)
+         {
+            buf[0] = replace_str(buf[0], ".pkg", "");
+            char *retval = malloc(sizeof(char)*256);
+            strcpy(retval, buf[0]);
+            return retval;
+         }
+      }   
+   }
+        char *cid = getContentID(sourcefile);
+        strcpy(retval, cid);
+        free(cid);
+        return retval;       
 }
 
 
@@ -354,6 +421,26 @@ int isrelink()
 }
 
 
+void resetflags()
+{
+    if (file_exists(ini_file_path)) 
+    {
+       FILE *cfile = fopen(ini_file_path, "rb");
+       char *idata = read_string(cfile);
+       fclose(cfile);
+       if (strlen(idata) != 0)
+       {
+          if(strstr(idata, "//RENAME_APP") == NULL) 
+          {
+             idata = replace_str(idata, "RENAME_APP", "//RENAME_APP");
+          }
+          FILE *dfile = fopen(ini_file_path,"wb");
+          fwrite(idata, 1, strlen(idata), dfile);
+          fclose(dfile);
+       }
+    }
+}
+
 
 void copySmFile(char *sourcefile, char* destfile)
 {
@@ -480,11 +567,11 @@ void copypkg(char *sourcepath, char* destpath)
         if (isfpkg(sourcepath) == 0) 
         {
             char cmsg[1024];
-            char dstfile[50];
+            char dstfile[256];
             char *ndestpath;
-            char *cid = getContentID(sourcepath);
-            sprintf(dstfile, "%s.pkg", cid);
-            free(cid);
+            char *pknm = getPkgName(sourcepath);
+            sprintf(dstfile, "%s.pkg", pknm);
+            free(pknm);
             if(strstr(sourcepath, "app.pkg") != NULL)
             {
                 ndestpath = replace_str(destpath, "app.pkg", dstfile);
@@ -532,10 +619,10 @@ void checkusbpkg(char *sourcedir, char* destdir) {
      {
         if (isfpkg(sourcedir) == 0) 
         {
-            char dstfile[50];
-            char *cid = getContentID(sourcedir);
-            sprintf(dstfile, "%s.pkg", cid);
-            free(cid);
+            char dstfile[256];
+            char *pknm = getPkgName(sourcedir);
+            sprintf(dstfile, "%s.pkg", pknm);
+            free(pknm);
             if(strstr(sourcedir, "app.pkg") != NULL)
             {
                 destdir = replace_str(destdir, "app.pkg", dstfile);
@@ -588,13 +675,14 @@ void relink(char *sourcepath, char* destpath)
    {
       if (symlink_exists(sourcepath))
       {
+         char dstfile[256];
+         char cidfile[50];
+         char *ndestpath;
          if (file_exists(destpath)) 
          {
-            char dstfile[50];
-            char *ndestpath;
-            char *cid = getContentID(destpath);
-            sprintf(dstfile, "%s.pkg", cid);
-            free(cid);
+            char *pknm = getPkgName(sourcepath);
+            sprintf(dstfile, "%s.pkg", pknm);
+            free(pknm);
             if(strstr(destpath, "app.pkg") != NULL)
             {
                 ndestpath = replace_str(destpath, "app.pkg", dstfile);
@@ -606,6 +694,32 @@ void relink(char *sourcepath, char* destpath)
             rename(destpath, ndestpath);
             unlink(sourcepath);
             symlink(ndestpath, sourcepath);
+         }
+
+         else
+         {
+            char *cdestpath;
+            char *cid = getContentID(sourcepath);
+            sprintf(cidfile, "%s.pkg", cid);
+            free(cid);
+            if(strstr(sourcepath, "app.pkg") != NULL)
+            {
+                cdestpath = replace_str(destpath, "app.pkg", cidfile);
+            }
+            else
+            {
+                cdestpath = replace_str(destpath, "patch.pkg", cidfile);
+            }
+            if (file_exists(cdestpath)) 
+            {
+                char *pknm = getPkgName(sourcepath);
+                sprintf(dstfile, "%s.pkg", pknm);
+                free(pknm);
+                ndestpath = replace_str(cdestpath, cidfile, dstfile);
+                rename(cdestpath, ndestpath);
+                unlink(sourcepath);
+                symlink(ndestpath, sourcepath);
+            }
          }
       }
    }
@@ -672,7 +786,6 @@ void copyDir(char *sourcedir, char* destdir)
 }
 
 
-
 void *nthread_func(void *arg)
 {
         time_t t1, t2;
@@ -706,7 +819,6 @@ void *nthread_func(void *arg)
 	}
 	return NULL;
 }
-
 
 
 void *sthread_func(void *arg)
@@ -778,11 +890,14 @@ int _main(struct thread *td) {
                            systemMessage("Copying updates to USB0");
                            copyDir("/user/patch","/mnt/usb0/PS4/updates");
                         }
+                        if (isrelink())
+                        {
+                           resetflags();
+                        }
                         systemMessage("Complete.");
             }
     nthread_run = 0;
     return 0;
 }
-
 
 
