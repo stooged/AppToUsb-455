@@ -221,7 +221,7 @@ void makeini()
     {
     FILE *ini = fopen(ini_file_path,"wb");
     char *buffer;
-    buffer ="To check the usb root for the pkg file to save time copying from the internal ps4 drive then uncomment the line below.\r\nbut remember this will move the pkg from the root directory to the PS4 folder.\r\n//CHECK_USB\r\n\r\nTo rename previously linked pkg files to the new format uncomment the line below.\r\n//RENAME_APP\r\n\r\nTo leave game updates on the internal drive uncomment the line below.\r\n//IGNORE_UPDATES\r\n\r\nTo use this list as a list of games you want to move not ignore then uncomment the line below.\r\n//MODE_MOVE\r\n\r\nExample ignore or move usage.\r\n\r\nCUSAXXXX1\r\nCUSAXXXX2\r\nCUSAXXXX3";
+    buffer ="To check the usb root for the pkg file to save time copying from the internal ps4 drive then uncomment the line below.\r\nbut remember this will move the pkg from the root directory to the PS4 folder.\r\n//CHECK_USB\r\n\r\nTo rename previously linked pkg files to the new format uncomment the line below.\r\n//RENAME_APP\r\n\r\nTo disable the startup warning message uncomment the line below\r\n//DISABLE_WARNING\r\n\r\nTo disable the processing of icons/art and sound uncomment the line below\r\n//DISABLE_META\r\n\r\nTo leave game updates on the internal drive uncomment the line below.\r\n//IGNORE_UPDATES\r\n\r\nTo use this list as a list of games you want to move not ignore then uncomment the line below.\r\n//MODE_MOVE\r\n\r\nExample ignore or move usage.\r\n\r\nCUSAXXXX1\r\nCUSAXXXX2\r\nCUSAXXXX3";
     fwrite(buffer, 1, strlen(buffer), ini);
     fclose(ini);
     }
@@ -261,7 +261,6 @@ char *getPkgName(char* sourcefile)
          if (strlen(buf[0]) > 0)
          {
             buf[0] = replace_str(buf[0], ".pkg", "");
-            char *retval = malloc(sizeof(char)*256);
             strcpy(retval, buf[0]);
             return retval;
          }
@@ -421,6 +420,62 @@ int isrelink()
 }
 
 
+int isquiet()
+{
+        if (file_exists(ini_file_path)) 
+        {
+            FILE *cfile = fopen(ini_file_path, "rb");
+            char *idata = read_string(cfile);
+            fclose(cfile);
+            if (strlen(idata) != 0)
+            {
+                if(strstr(idata, "//DISABLE_WARNING") != NULL) 
+                {
+                   return 0;
+                }
+                else if(strstr(idata, "DISABLE_WARNING") != NULL) 
+                {
+                   return 1;
+                }
+             return 0;
+             }
+        return 0;
+        }
+        else
+        {
+             return 0;
+        }
+}
+
+
+int isnometa()
+{
+        if (file_exists(ini_file_path)) 
+        {
+            FILE *cfile = fopen(ini_file_path, "rb");
+            char *idata = read_string(cfile);
+            fclose(cfile);
+            if (strlen(idata) != 0)
+            {
+                if(strstr(idata, "//DISABLE_META") != NULL) 
+                {
+                   return 0;
+                }
+                else if(strstr(idata, "DISABLE_META") != NULL) 
+                {
+                   return 1;
+                }
+             return 0;
+             }
+        return 0;
+        }
+        else
+        {
+             return 0;
+        }
+}
+
+
 void resetflags()
 {
     if (file_exists(ini_file_path)) 
@@ -444,31 +499,28 @@ void resetflags()
 
 void copySmFile(char *sourcefile, char* destfile)
 {
-    if (!file_exists(destfile))
-    {
-        FILE *src = fopen(sourcefile, "rb");
-        if (src)
-        {
-            FILE *out = fopen(destfile,"wb");
-            if (out)
-            {
-                size_t bytes;
-                char *buffer = malloc(65536);
-                if (buffer != NULL)
-                {
-                    while (0 < (bytes = fread(buffer, 1, 65536, src)))
-                        fwrite(buffer, 1, bytes, out);
-                        free(buffer);
-                }
-                fclose(out);
-            }
-            else {
-            }
-            fclose(src);
-        }
-        else {
-        }
-    }
+     FILE *src = fopen(sourcefile, "rb");
+     if (src)
+     {
+         FILE *out = fopen(destfile,"wb");
+         if (out)
+         {
+             size_t bytes;
+             char *buffer = malloc(65536);
+             if (buffer != NULL)
+             {
+                 while (0 < (bytes = fread(buffer, 1, 65536, src)))
+                     fwrite(buffer, 1, bytes, out);
+                     free(buffer);
+             }
+             fclose(out);
+         }
+         else {
+         }
+         fclose(src);
+     }
+     else {
+     }
 }
 
 
@@ -518,7 +570,7 @@ void copyFile(char *sourcefile, char* destfile)
 
 void makePkgInfo(char *pkgFile, char *destpath)
 {
-    if(strstr(pkgFile, "app.pkg") != NULL)
+    if(strstr(pkgFile, "app.pkg") != NULL && !isnometa())
     {
         char *titleid;
         char srcfile[256];
@@ -526,34 +578,39 @@ void makePkgInfo(char *pkgFile, char *destpath)
         destpath = replace_str(destpath, "/app.pkg", "");
         titleid = replace_str(pkgFile, "/user/app/", "");
         titleid = replace_str(titleid, "/app.pkg", "");
-
         sprintf(srcfile, "/user/appmeta/%s/pronunciation.xml", titleid);
         if (file_exists(srcfile))
         {
            char *cid = getContentID(pkgFile);
            sprintf(dstfile, "%s/%s.txt", destpath , cid);
            free(cid);
-           copySmFile(srcfile, dstfile);
+           if (!file_exists(dstfile))
+           {
+              copySmFile(srcfile, dstfile);
+           }
         }
-
         sprintf(srcfile, "/user/appmeta/%s/icon0.png", titleid);
-        if (file_exists(srcfile))
+        sprintf(dstfile, "%s/icon0.png", destpath);
+        if (file_exists(srcfile) && !file_exists(dstfile))
         {
-           sprintf(dstfile, "%s/icon0.png", destpath);
            copySmFile(srcfile, dstfile);
         }
-
         sprintf(srcfile, "/user/appmeta/%s/pic0.png", titleid);
-        if (file_exists(srcfile))
+        sprintf(dstfile, "%s/pic0.png", destpath);
+        if (file_exists(srcfile) && !file_exists(dstfile))
         {
-           sprintf(dstfile, "%s/pic0.png", destpath);
            copySmFile(srcfile, dstfile);
         }
-
         sprintf(srcfile, "/user/appmeta/%s/pic1.png", titleid);
-        if (file_exists(srcfile))
+        sprintf(dstfile, "%s/pic1.png", destpath);
+        if (file_exists(srcfile) && !file_exists(dstfile))
         {
-           sprintf(dstfile, "%s/pic1.png", destpath);
+           copySmFile(srcfile, dstfile);
+        }
+        sprintf(srcfile, "/user/appmeta/%s/snd0.at9", titleid);
+        sprintf(dstfile, "%s/snd0.at9", destpath);
+        if (file_exists(srcfile) && !file_exists(dstfile))
+        {
            copySmFile(srcfile, dstfile);
         }
     }
@@ -786,6 +843,52 @@ void copyDir(char *sourcedir, char* destdir)
 }
 
 
+void copyMeta(char *sourcedir, char* destdir)
+{
+    DIR *dir;
+    struct dirent *dp;
+    struct stat info;
+    char src_path[1024], dst_path[1024];
+    dir = opendir(sourcedir);
+    if (!dir)
+        return;
+        mkdir(destdir, 0777);
+    while ((dp = readdir(dir)) != NULL)
+    {
+        if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..") || !strcmp(dp->d_name, "$RECYCLE.BIN") || !strcmp(dp->d_name, "System Volume Information"))
+        {}
+        else
+        {
+            sprintf(src_path, "%s/%s", sourcedir, dp->d_name);
+            sprintf(dst_path, "%s/%s", destdir  , dp->d_name);
+
+            if (!stat(src_path, &info))
+            {
+                if (S_ISDIR(info.st_mode))
+                {
+                  copyMeta(src_path, dst_path);
+                }
+                else
+                if (S_ISREG(info.st_mode))
+                {
+                   if(strstr(src_path, "icon0.png") != NULL || strstr(src_path, "pic0.png") != NULL || strstr(src_path, "pic1.png") != NULL || strstr(src_path, "snd0.at9") != NULL)
+                   { 
+                      if (file_exists(dst_path)) 
+                      {
+                         if (!file_compare(src_path, dst_path))
+                         {
+                            copySmFile(src_path, dst_path);
+                         }
+                      }
+                   }
+                }
+            }
+        }
+    }
+    closedir(dir);
+}
+
+
 void *nthread_func(void *arg)
 {
         time_t t1, t2;
@@ -859,11 +962,13 @@ int _main(struct thread *td) {
 	scePthreadCreate(&nthread, NULL, nthread_func, NULL, "nthread");
 	ScePthread sthread;
 	scePthreadCreate(&sthread, NULL, sthread_func, NULL, "sthread");
-        systemMessage("Warning this payload will modify the filesystem on your PS4\n\nUnplug your usb drive to cancel this");
-        sceKernelSleep(10);
-        systemMessage("Last warning\n\nUnplug your usb drive to cancel this");
-        sceKernelSleep(10);
-
+        if (!isquiet())
+        {
+           systemMessage("Warning this payload will modify the filesystem on your PS4\n\nUnplug your usb drive to cancel this");
+           sceKernelSleep(10);
+           systemMessage("Last warning\n\nUnplug your usb drive to cancel this");
+           sceKernelSleep(10);
+        }
            FILE *usbdir = fopen("/mnt/usb0/.dirtest", "wb");
          if (!usbdir)
             {
@@ -889,6 +994,11 @@ int _main(struct thread *td) {
                            mkdir("/mnt/usb0/PS4/updates/", 0777);
                            systemMessage("Copying updates to USB0");
                            copyDir("/user/patch","/mnt/usb0/PS4/updates");
+                        }
+                        if (!isnometa())
+                        {
+                           systemMessage("Processing appmeta");
+                           copyMeta("/mnt/usb0/PS4","/user/appmeta");
                         }
                         if (isrelink())
                         {
