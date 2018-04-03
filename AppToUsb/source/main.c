@@ -221,7 +221,7 @@ void makeini()
     {
     FILE *ini = fopen(ini_file_path,"wb");
     char *buffer;
-    buffer ="To check the usb root for the pkg file to save time copying from the internal ps4 drive then uncomment the line below.\r\nbut remember this will move the pkg from the root directory to the PS4 folder.\r\n//CHECK_USB\r\n\r\nTo rename previously linked pkg files to the new format uncomment the line below.\r\n//RENAME_APP\r\n\r\nTo disable the startup warning message uncomment the line below\r\n//DISABLE_WARNING\r\n\r\nTo disable the processing of icons/art and sound uncomment the line below\r\n//DISABLE_META\r\n\r\nTo leave game updates on the internal drive uncomment the line below.\r\n//IGNORE_UPDATES\r\n\r\nTo use this list as a list of games you want to move not ignore then uncomment the line below.\r\n//MODE_MOVE\r\n\r\nExample ignore or move usage.\r\n\r\nCUSAXXXX1\r\nCUSAXXXX2\r\nCUSAXXXX3";
+    buffer ="To check the usb root for the pkg file to save time copying from the internal ps4 drive then uncomment the line below.\r\nbut remember this will move the pkg from the root directory to the PS4 folder.\r\n//CHECK_USB\r\n\r\nTo rename previously linked pkg files to the new format uncomment the line below.\r\n//RENAME_APP\r\n\r\nTo disable the processing of icons/art and sound uncomment the line below\r\n//DISABLE_META\r\n\r\nTo leave game updates on the internal drive uncomment the line below.\r\n//IGNORE_UPDATES\r\n\r\nTo use this list as a list of games you want to move not ignore then uncomment the line below.\r\n//MODE_MOVE\r\n\r\nExample ignore or move usage.\r\n\r\nCUSAXXXX1\r\nCUSAXXXX2\r\nCUSAXXXX3";
     fwrite(buffer, 1, strlen(buffer), ini);
     fclose(ini);
     }
@@ -406,34 +406,6 @@ int isrelink()
                    return 0;
                 }
                 else if(strstr(idata, "RENAME_APP") != NULL) 
-                {
-                   return 1;
-                }
-             return 0;
-             }
-        return 0;
-        }
-        else
-        {
-             return 0;
-        }
-}
-
-
-int isquiet()
-{
-        if (file_exists(ini_file_path)) 
-        {
-            FILE *cfile = fopen(ini_file_path, "rb");
-            char *idata = read_string(cfile);
-            fclose(cfile);
-            if (strlen(idata) != 0)
-            {
-                if(strstr(idata, "//DISABLE_WARNING") != NULL) 
-                {
-                   return 0;
-                }
-                else if(strstr(idata, "DISABLE_WARNING") != NULL) 
                 {
                    return 1;
                 }
@@ -962,14 +934,11 @@ int _main(struct thread *td) {
 	scePthreadCreate(&nthread, NULL, nthread_func, NULL, "nthread");
 	ScePthread sthread;
 	scePthreadCreate(&sthread, NULL, sthread_func, NULL, "sthread");
-        if (!isquiet())
-        {
-           systemMessage("Warning this payload will modify the filesystem on your PS4\n\nUnplug your usb drive to cancel this");
-           sceKernelSleep(10);
-           systemMessage("Last warning\n\nUnplug your usb drive to cancel this");
-           sceKernelSleep(10);
-        }
-           FILE *usbdir = fopen("/mnt/usb0/.dirtest", "wb");
+        systemMessage("Warning this payload will modify the filesystem on your PS4\n\nUnplug your usb drive to cancel this");
+        sceKernelSleep(10);
+        systemMessage("Last warning\n\nUnplug your usb drive to cancel this");
+        sceKernelSleep(10);
+        FILE *usbdir = fopen("/mnt/usb0/.dirtest", "wb");
          if (!usbdir)
             {
                   systemMessage("No usb mount found.\nYou must use a eXfat formatted usb hdd\nThe USB drive must be plugged into USB0");
