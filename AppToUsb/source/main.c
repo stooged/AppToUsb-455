@@ -221,7 +221,7 @@ void makeini()
     {
     FILE *ini = fopen(ini_file_path,"wb");
     char *buffer;
-    buffer ="To check the usb root for the pkg file to save time copying from the internal ps4 drive then uncomment the line below.\r\nbut remember this will move the pkg from the root directory to the PS4 folder.\r\n//CHECK_USB\r\n\r\nTo rename previously linked pkg files to the new format uncomment the line below.\r\n//RENAME_APP\r\n\r\nTo disable the processing of icons/art and sound uncomment the line below\r\n//DISABLE_META\r\n\r\nTo leave game updates on the internal drive uncomment the line below.\r\n//IGNORE_UPDATES\r\n\r\nTo use this list as a list of games you want to move not ignore then uncomment the line below.\r\n//MODE_MOVE\r\n\r\nExample ignore or move usage.\r\n\r\nCUSAXXXX1\r\nCUSAXXXX2\r\nCUSAXXXX3";
+    buffer ="To check the usb root for the pkg file to save time copying from the internal ps4 drive then uncomment the line below.\r\nbut remember this will move the pkg from the root directory to the PS4 folder.\r\n//CHECK_USB\r\n\r\nTo rename previously linked pkg files to the new format uncomment the line below.\r\n//RENAME_APP\r\n\r\nTo disable the processing of icons/art and sound uncomment the line below.\r\n//DISABLE_META\r\n\r\nTo leave game updates on the internal drive uncomment the line below.\r\n//IGNORE_UPDATES\r\n\r\nTo move DLC to the usb hdd uncomment the line below.\r\n//MOVE_DLC\r\n\r\nTo use this list as a list of games you want to move not ignore then uncomment the line below.\r\n//MODE_MOVE\r\n\r\nExample ignore or move usage.\r\n\r\nCUSAXXXX1\r\nCUSAXXXX2\r\nCUSAXXXX3";
     fwrite(buffer, 1, strlen(buffer), ini);
     fclose(ini);
     }
@@ -288,10 +288,17 @@ int isinlist(char *sourcefile)
                 tmpstr = replace_str(sourcefile, "/user/app/", "");
                 tmpstr = replace_str(tmpstr, "/app.pkg", "");
                 }
-                else
+                else if (strstr(sourcefile, "/user/patch/") != NULL)
                 {
                 tmpstr = replace_str(sourcefile, "/user/patch/", "");
                 tmpstr = replace_str(tmpstr, "/patch.pkg", "");
+                }
+                else
+                {
+                tmpstr = replace_str(sourcefile, "/user/addcont/", "");
+                char **buf = NULL;
+                split_string(tmpstr,'/',&buf);
+                tmpstr = buf[0];
                 }
                 if(strstr(idata, tmpstr) != NULL) 
                 {
@@ -448,6 +455,34 @@ int isnometa()
 }
 
 
+int isdlc()
+{
+        if (file_exists(ini_file_path)) 
+        {
+            FILE *cfile = fopen(ini_file_path, "rb");
+            char *idata = read_string(cfile);
+            fclose(cfile);
+            if (strlen(idata) != 0)
+            {
+                if(strstr(idata, "//MOVE_DLC") != NULL) 
+                {
+                   return 0;
+                }
+                else if(strstr(idata, "MOVE_DLC") != NULL) 
+                {
+                   return 1;
+                }
+             return 0;
+             }
+        return 0;
+        }
+        else
+        {
+             return 0;
+        }
+}
+
+
 void resetflags()
 {
     if (file_exists(ini_file_path)) 
@@ -539,56 +574,6 @@ void copyFile(char *sourcefile, char* destfile)
 }
 
 
-
-void makePkgInfo(char *pkgFile, char *destpath)
-{
-    if(strstr(pkgFile, "app.pkg") != NULL && !isnometa())
-    {
-        char *titleid;
-        char srcfile[256];
-        char dstfile[256];
-        destpath = replace_str(destpath, "/app.pkg", "");
-        titleid = replace_str(pkgFile, "/user/app/", "");
-        titleid = replace_str(titleid, "/app.pkg", "");
-        sprintf(srcfile, "/user/appmeta/%s/pronunciation.xml", titleid);
-        if (file_exists(srcfile))
-        {
-           char *cid = getContentID(pkgFile);
-           sprintf(dstfile, "%s/%s.txt", destpath , cid);
-           free(cid);
-           if (!file_exists(dstfile))
-           {
-              copySmFile(srcfile, dstfile);
-           }
-        }
-        sprintf(srcfile, "/user/appmeta/%s/icon0.png", titleid);
-        sprintf(dstfile, "%s/icon0.png", destpath);
-        if (file_exists(srcfile) && !file_exists(dstfile))
-        {
-           copySmFile(srcfile, dstfile);
-        }
-        sprintf(srcfile, "/user/appmeta/%s/pic0.png", titleid);
-        sprintf(dstfile, "%s/pic0.png", destpath);
-        if (file_exists(srcfile) && !file_exists(dstfile))
-        {
-           copySmFile(srcfile, dstfile);
-        }
-        sprintf(srcfile, "/user/appmeta/%s/pic1.png", titleid);
-        sprintf(dstfile, "%s/pic1.png", destpath);
-        if (file_exists(srcfile) && !file_exists(dstfile))
-        {
-           copySmFile(srcfile, dstfile);
-        }
-        sprintf(srcfile, "/user/appmeta/%s/snd0.at9", titleid);
-        sprintf(dstfile, "%s/snd0.at9", destpath);
-        if (file_exists(srcfile) && !file_exists(dstfile))
-        {
-           copySmFile(srcfile, dstfile);
-        }
-    }
-}
-
-
 void copypkg(char *sourcepath, char* destpath)
 {       
     if (!symlink_exists(sourcepath))
@@ -605,9 +590,13 @@ void copypkg(char *sourcepath, char* destpath)
             {
                 ndestpath = replace_str(destpath, "app.pkg", dstfile);
             }
-            else
+            else if(strstr(sourcepath, "patch.pkg") != NULL)
             {
                 ndestpath = replace_str(destpath, "patch.pkg", dstfile);
+            }
+            else
+            {
+                ndestpath = replace_str(destpath, "ac.pkg", dstfile);
             }
             if (file_exists(destpath)) 
             {
@@ -656,9 +645,13 @@ void checkusbpkg(char *sourcedir, char* destdir) {
             {
                 destdir = replace_str(destdir, "app.pkg", dstfile);
             }
-            else
+            else if(strstr(sourcedir, "patch.pkg") != NULL)
             {
                 destdir = replace_str(destdir, "patch.pkg", dstfile);
+            }
+            else
+            {
+                destdir = replace_str(destdir, "ac.pkg", dstfile);
             }
             if (!file_exists(destdir)) 
             {
@@ -756,6 +749,92 @@ void relink(char *sourcepath, char* destpath)
 
 
 
+
+void copyMeta(char *sourcedir, char* destdir, int tousb)
+{
+    DIR *dir;
+    struct dirent *dp;
+    struct stat info;
+    char src_path[1024], dst_path[1024];
+    dir = opendir(sourcedir);
+    if (!dir)
+        return;
+        mkdir(destdir, 0777);
+    while ((dp = readdir(dir)) != NULL)
+    {
+        if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..") || !strcmp(dp->d_name, "$RECYCLE.BIN") || !strcmp(dp->d_name, "System Volume Information"))
+        {}
+        else
+        {
+            sprintf(src_path, "%s/%s", sourcedir, dp->d_name);
+            sprintf(dst_path, "%s/%s", destdir  , dp->d_name);
+
+            if (!stat(src_path, &info))
+            {
+                if (S_ISDIR(info.st_mode))
+                {
+                  copyMeta(src_path, dst_path, tousb);
+                }
+                else
+                if (S_ISREG(info.st_mode))
+                {
+                   if(strstr(src_path, ".png") != NULL || strstr(src_path, ".at9") != NULL)
+                   { 
+                      if (tousb == 1)
+                      {
+                         if (!file_exists(dst_path)) 
+                         {
+                            copySmFile(src_path, dst_path);
+                         }
+                      }
+                      else
+                      {
+                         if (file_exists(dst_path)) 
+                         {
+                         if (!file_compare(src_path, dst_path))
+                            {
+                               copySmFile(src_path, dst_path);
+                            }
+                         }
+                      }
+                   }
+                }
+            }
+        }
+    }
+    closedir(dir);
+}
+
+
+
+void makePkgInfo(char *pkgFile, char *destpath)
+{
+    if(strstr(pkgFile, "app.pkg") != NULL && !isnometa())
+    {
+        char *titleid;
+        char srcfile[256];
+        char dstfile[256];
+        destpath = replace_str(destpath, "/app.pkg", "");
+        titleid = replace_str(pkgFile, "/user/app/", "");
+        titleid = replace_str(titleid, "/app.pkg", "");
+        sprintf(srcfile, "/user/appmeta/%s/pronunciation.xml", titleid);
+        if (file_exists(srcfile))
+        {
+           char *cid = getContentID(pkgFile);
+           sprintf(dstfile, "%s/%s.txt", destpath , cid);
+           free(cid);
+           if (!file_exists(dstfile))
+           {
+              copySmFile(srcfile, dstfile);
+           }
+        }
+         sprintf(srcfile, "/user/appmeta/%s", titleid);
+         copyMeta(srcfile, destpath, 1);
+    }
+}
+
+
+
 void copyDir(char *sourcedir, char* destdir)
 {
     DIR *dir;
@@ -784,7 +863,7 @@ void copyDir(char *sourcedir, char* destdir)
                 else
                 if (S_ISREG(info.st_mode))
                 {
-                  if(strstr(src_path, "app.pkg") != NULL || strstr(src_path, "patch.pkg") != NULL) 
+                  if(strstr(src_path, "app.pkg") != NULL || strstr(src_path, "patch.pkg") != NULL || strstr(src_path, "ac.pkg") != NULL) 
                   {
                    if (ismovemode() )
                    {
@@ -815,50 +894,7 @@ void copyDir(char *sourcedir, char* destdir)
 }
 
 
-void copyMeta(char *sourcedir, char* destdir)
-{
-    DIR *dir;
-    struct dirent *dp;
-    struct stat info;
-    char src_path[1024], dst_path[1024];
-    dir = opendir(sourcedir);
-    if (!dir)
-        return;
-        mkdir(destdir, 0777);
-    while ((dp = readdir(dir)) != NULL)
-    {
-        if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..") || !strcmp(dp->d_name, "$RECYCLE.BIN") || !strcmp(dp->d_name, "System Volume Information"))
-        {}
-        else
-        {
-            sprintf(src_path, "%s/%s", sourcedir, dp->d_name);
-            sprintf(dst_path, "%s/%s", destdir  , dp->d_name);
 
-            if (!stat(src_path, &info))
-            {
-                if (S_ISDIR(info.st_mode))
-                {
-                  copyMeta(src_path, dst_path);
-                }
-                else
-                if (S_ISREG(info.st_mode))
-                {
-                   if(strstr(src_path, "icon0.png") != NULL || strstr(src_path, "pic0.png") != NULL || strstr(src_path, "pic1.png") != NULL || strstr(src_path, "snd0.at9") != NULL)
-                   { 
-                      if (file_exists(dst_path)) 
-                      {
-                         if (!file_compare(src_path, dst_path))
-                         {
-                            copySmFile(src_path, dst_path);
-                         }
-                      }
-                   }
-                }
-            }
-        }
-    }
-    closedir(dir);
-}
 
 
 void *nthread_func(void *arg)
@@ -964,10 +1000,16 @@ int _main(struct thread *td) {
                            systemMessage("Copying updates to USB0");
                            copyDir("/user/patch","/mnt/usb0/PS4/updates");
                         }
+                        if (isdlc())
+                        {
+                           mkdir("/mnt/usb0/PS4/dlc/", 0777);
+                           systemMessage("Copying dlc to USB0");
+                           copyDir("/user/addcont","/mnt/usb0/PS4/dlc");
+                        }
                         if (!isnometa())
                         {
                            systemMessage("Processing appmeta");
-                           copyMeta("/mnt/usb0/PS4","/user/appmeta");
+                           copyMeta("/mnt/usb0/PS4","/user/appmeta", 0);
                         }
                         if (isrelink())
                         {
